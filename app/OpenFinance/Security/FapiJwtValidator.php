@@ -114,8 +114,8 @@ final class FapiJwtValidator
 
         $scopeClaim = $parsed->claims()->get('scope', '');
         $scopes = is_array($scopeClaim)
-            ? $scopeClaim
-            : array_filter(explode(' ', (string) $scopeClaim));
+            ? array_values(array_map(strval(...), $scopeClaim))
+            : array_values(array_filter(explode(' ', (string) $scopeClaim)));
 
         $consentId = $parsed->claims()->has('consent_id')
             ? (string) $parsed->claims()->get('consent_id')
@@ -128,7 +128,7 @@ final class FapiJwtValidator
         $accountIds = [];
         if ($parsed->claims()->has('account_ids')) {
             $raw = $parsed->claims()->get('account_ids');
-            $accountIds = is_array($raw) ? $raw : [];
+            $accountIds = is_array($raw) ? array_values(array_map(strval(...), $raw)) : [];
         }
 
         return new OpenFinanceContext(

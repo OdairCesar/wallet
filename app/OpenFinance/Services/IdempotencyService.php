@@ -48,7 +48,7 @@ final class IdempotencyService
             }
 
             try {
-                DB::transaction(function () use ($clientId, $route, $key, $hash, $existing): void {
+                DB::transaction(function () use ($clientId, $route, $key, $hash): void {
                     $locked = $this->findActiveKey($clientId, $route, $key, lock: true);
 
                     if ($locked !== null && $locked->response_status > 0) {

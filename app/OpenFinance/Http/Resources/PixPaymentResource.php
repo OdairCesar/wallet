@@ -6,6 +6,7 @@ use App\Projections\Models\PaymentIntent;
 
 final class PixPaymentResource
 {
+    /** @return array<string, mixed> */
     public static function fromModel(PaymentIntent $payment): array
     {
         return [

@@ -99,6 +99,24 @@ final class PixPaymentService
 
         if (! $decision->approved) {
             $this->publisher->publish(DomainEventEnvelope::create(
+                eventType: PaymentEventType::PixInitiated,
+                aggregateId: $paymentId,
+                aggregateType: 'pix_payment',
+                payload: [
+                    'paymentId' => $paymentId,
+                    'consentId' => $consentId,
+                    'accountId' => $creditorAccountId,
+                    'debtorAccountId' => $debtorAccountId,
+                    'status' => PixPaymentStatus::Received->value,
+                    'amountCents' => $amountCents,
+                    'currency' => 'BRL',
+                    'localInstrument' => $localInstrument,
+                    'clientId' => $clientId,
+                ],
+                correlationId: $correlationId,
+            ));
+
+            $this->publisher->publish(DomainEventEnvelope::create(
                 eventType: FraudEventType::TransactionBlocked,
                 aggregateId: $paymentId,
                 aggregateType: 'pix_payment',

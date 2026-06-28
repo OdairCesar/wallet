@@ -170,4 +170,56 @@ describe('Open Finance PIX API', function () {
         $response->assertCreated()
             ->assertJsonPath('data.status', 'ACSC');
     });
+
+    it('returns 201 with rejected status when payment is blocked by fraud rules', function () {
+        config(['open_finance.fraud.max_amount_cents' => 100]);
+
+        $consentResponse = $this->postJson('/api/open-banking/consents/v3/consents', [
+            'data' => [
+                'permissions' => ['PAYMENTS_INITIATE'],
+                'loggedUser' => ['document' => ['identification' => '52998224725']],
+            ],
+        ], OpenFinanceTestToken::authorizationHeader());
+
+        $consentId = $consentResponse->json('data.consentId');
+
+        $debtor = $this->postJson('/api/open-banking/accounts/v2/accounts', [
+            'data' => ['accountType' => 'PERSONAL'],
+        ], OpenFinanceTestToken::authorizationHeader(consentId: $consentId));
+
+        $creditor = $this->postJson('/api/open-banking/accounts/v2/accounts', [
+            'data' => ['accountType' => 'PERSONAL'],
+        ], OpenFinanceTestToken::authorizationHeader(consentId: $consentId));
+
+        $debtorId = $debtor->json('data.accountId');
+        $creditorId = $creditor->json('data.accountId');
+
+        $this->postJson(
+            "/api/open-banking/consents/v3/consents/{$consentId}/authorise",
+            [],
+            OpenFinanceTestToken::writeHeaders(
+                consentId: $consentId,
+                accountIds: [$debtorId, $creditorId],
+                loggedUserDocument: '52998224725',
+            ),
+        )->assertOk();
+
+        app(WalletCommandService::class)->deposit($debtorId, 10000, 'test-seed');
+
+        $response = $this->postJson('/api/open-banking/payments/v5/pix/payments', [
+            'data' => [
+                'consentId' => $consentId,
+                'localInstrument' => 'DICT',
+                'payment' => ['amount' => '10.00', 'currency' => 'BRL'],
+                'creditorAccount' => ['accountId' => $creditorId],
+                'debtorAccount' => ['accountId' => $debtorId],
+            ],
+        ], OpenFinanceTestToken::authorizationHeader(
+            consentId: $consentId,
+            accountIds: [$debtorId, $creditorId],
+        ));
+
+        $response->assertCreated()
+            ->assertJsonPath('data.status', 'RJCT');
+    });
 });

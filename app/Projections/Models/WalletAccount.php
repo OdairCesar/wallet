@@ -28,11 +28,13 @@ class WalletAccount extends Model
         'account_number',
     ];
 
+    /** @return HasOne<AccountBalance, $this> */
     public function balance(): HasOne
     {
         return $this->hasOne(AccountBalance::class, 'account_id');
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

@@ -13,7 +13,9 @@ use App\OpenFinance\Security\OpenFinanceAuthorizationService;
 use App\OpenFinance\Security\OpenFinanceContext;
 use App\OpenFinance\Security\OpenFinanceContextResolver;
 use App\OpenFinance\Support\Money;
+use App\OpenFinance\Services\ConsentService;
 use App\Projections\Models\AccountBalance;
+use App\Projections\Models\Consent;
 use App\Projections\Models\ConsentAccount;
 use App\Projections\Models\WalletAccount;
 use App\Projections\Models\WalletTransaction;
@@ -29,6 +31,7 @@ final class AccountController
         private readonly WalletCommandService $wallet,
         private readonly OpenFinanceAuthorizationService $authorization,
         private readonly OpenFinanceContextResolver $contextResolver,
+        private readonly ConsentService $consents,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -51,8 +54,9 @@ final class AccountController
 
         $type = AccountType::tryFrom($validated['data']['accountType'] ?? '') ?? AccountType::Personal;
         $correlationId = (string) Str::uuid();
+        $userId = $this->resolveUserIdForAccountCreation($context);
 
-        $accountId = $this->wallet->createAccount(null, $type, $correlationId);
+        $accountId = $this->wallet->createAccount($userId, $type, $correlationId, $context->clientId);
         $account = WalletAccount::query()->findOrFail($accountId);
 
         if ($context->consentId !== null) {
@@ -168,5 +172,24 @@ final class AccountController
         $this->authorization->assertAccountAccess($context, $accountId);
 
         return $context;
+    }
+
+    private function resolveUserIdForAccountCreation(OpenFinanceContext $context): ?int
+    {
+        if ($context->loggedUserDocument !== null) {
+            return $this->consents->findOrCreateUserByDocument($context->loggedUserDocument)->id;
+        }
+
+        if ($context->consentId === null) {
+            return null;
+        }
+
+        $consent = Consent::query()->where('consent_id', $context->consentId)->first();
+
+        if ($consent?->logged_user_document === null) {
+            return null;
+        }
+
+        return $this->consents->findOrCreateUserByDocument($consent->logged_user_document)->id;
     }
 }

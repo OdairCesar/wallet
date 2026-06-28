@@ -6,6 +6,7 @@ use App\Projections\Models\WalletAccount;
 
 final class AccountResource
 {
+    /** @return array<string, mixed> */
     public static function fromModel(WalletAccount $account): array
     {
         return [

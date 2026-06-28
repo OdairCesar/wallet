@@ -4,6 +4,10 @@ namespace App\Projections\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property string $correlation_id
+ * @property array<string, mixed>|null $metadata
+ */
 class Operation extends Model
 {
     public $incrementing = false;

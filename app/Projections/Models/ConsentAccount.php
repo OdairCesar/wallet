@@ -16,11 +16,13 @@ class ConsentAccount extends Model
         'account_id',
     ];
 
+    /** @return BelongsTo<Consent, $this> */
     public function consent(): BelongsTo
     {
         return $this->belongsTo(Consent::class, 'consent_id', 'consent_id');
     }
 
+    /** @return BelongsTo<WalletAccount, $this> */
     public function account(): BelongsTo
     {
         return $this->belongsTo(WalletAccount::class, 'account_id', 'id');

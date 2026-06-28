@@ -6,6 +6,7 @@ use App\Projections\Models\Consent;
 
 final class ConsentResource
 {
+    /** @return array<string, mixed> */
     public static function fromModel(Consent $consent): array
     {
         return [

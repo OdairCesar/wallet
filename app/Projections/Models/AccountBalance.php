@@ -24,6 +24,7 @@ class AccountBalance extends Model
         'updated_at',
     ];
 
+    /** @return BelongsTo<WalletAccount, $this> */
     public function account(): BelongsTo
     {
         return $this->belongsTo(WalletAccount::class, 'account_id');

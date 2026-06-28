@@ -8,7 +8,8 @@ use Illuminate\Http\JsonResponse;
 final class OpenFinanceResponse
 {
     /**
-     * @param  array<string, mixed>|list<mixed>  $data
+     * @param  array<string, mixed>|array<int, array<string, mixed>>  $data
+     * @param  array<string, mixed>|null  $meta
      */
     public static function data(array $data, int $status = 200, ?array $meta = null): JsonResponse
     {

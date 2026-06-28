@@ -82,11 +82,11 @@ final class JwksClient
     private function encodeLength(int $length): string
     {
         if ($length <= 0x7F) {
-            return chr($length);
+            return chr($length & 0xFF);
         }
 
-        $temp = ltrim(pack('N', $length), chr(0));
+        $temp = ltrim(pack('N', $length), "\0");
 
-        return chr(0x80 | strlen($temp)).$temp;
+        return chr((0x80 | strlen($temp)) & 0xFF).$temp;
     }
 }

@@ -178,6 +178,46 @@ describe('Open Finance Security', function () {
             ->assertJsonPath('errors.0.code', 'CONSENTIMENTO_INVALIDO');
     });
 
+    it('rejects consent authorise when account_ids in token do not belong to user', function () {
+        $victimConsent = $this->postJson('/api/open-banking/consents/v3/consents', [
+            'data' => [
+                'permissions' => ['PAYMENTS_INITIATE'],
+                'loggedUser' => ['document' => ['identification' => '39053344705']],
+            ],
+        ], OpenFinanceTestToken::writeHeaders(clientId: 'victim-client'));
+
+        $victimConsent->assertCreated();
+        $victimConsentId = $victimConsent->json('data.consentId');
+
+        $victimAccount = $this->postJson('/api/open-banking/accounts/v2/accounts', [
+            'data' => ['accountType' => 'PERSONAL'],
+        ], OpenFinanceTestToken::writeHeaders(clientId: 'victim-client', consentId: $victimConsentId));
+
+        $victimAccountId = $victimAccount->json('data.accountId');
+
+        $attackerConsent = $this->postJson('/api/open-banking/consents/v3/consents', [
+            'data' => [
+                'permissions' => ['PAYMENTS_INITIATE'],
+                'loggedUser' => ['document' => ['identification' => '52998224725']],
+            ],
+        ], OpenFinanceTestToken::writeHeaders(clientId: 'attacker-client'));
+
+        $attackerConsent->assertCreated();
+        $attackerConsentId = $attackerConsent->json('data.consentId');
+
+        $this->postJson(
+            "/api/open-banking/consents/v3/consents/{$attackerConsentId}/authorise",
+            [],
+            OpenFinanceTestToken::writeHeaders(
+                clientId: 'attacker-client',
+                consentId: $attackerConsentId,
+                accountIds: [$victimAccountId],
+                loggedUserDocument: '52998224725',
+            ),
+        )->assertStatus(422)
+            ->assertJsonPath('errors.0.code', 'CONSENTIMENTO_INVALIDO');
+    });
+
     it('blocks transfer without consent in token when FAPI is enabled', function () {
         config(['open_finance.fapi.enabled' => true]);
         config(['open_finance.jwt.secret' => 'test-secret']);

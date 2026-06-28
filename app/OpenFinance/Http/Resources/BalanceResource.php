@@ -6,6 +6,7 @@ use App\Projections\Models\AccountBalance;
 
 final class BalanceResource
 {
+    /** @return array<string, mixed> */
     public static function fromModel(AccountBalance $balance): array
     {
         return [
@@ -15,6 +16,7 @@ final class BalanceResource
         ];
     }
 
+    /** @return array<string, string> */
     private static function money(int $amountCents, string $currency): array
     {
         return [

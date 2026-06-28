@@ -6,6 +6,7 @@ use App\Projections\Models\WalletTransaction;
 
 final class TransactionResource
 {
+    /** @return array<string, mixed> */
     public static function fromModel(WalletTransaction $transaction): array
     {
         return [

@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\OpenFinance\Security\OpenFinanceContext;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\SecurityScheme;
@@ -38,7 +39,9 @@ class OpenFinanceServiceProvider extends ServiceProvider
     {
         RateLimiter::for('open-finance', function (Request $request) {
             $context = $request->attributes->get('open_finance_context');
-            $key = $context?->clientId ?? $request->ip();
+            $key = $context instanceof OpenFinanceContext
+                ? $context->clientId
+                : $request->ip();
 
             return Limit::perMinute(config('open_finance.rate_limit.per_minute'))->by($key);
         });

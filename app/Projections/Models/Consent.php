@@ -3,7 +3,18 @@
 namespace App\Projections\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property string $consent_id
+ * @property string|null $client_id
+ * @property string $status
+ * @property list<string>|null $permissions
+ * @property Carbon|null $expiration_date_time
+ * @property Carbon|null $creation_date_time
+ * @property string|null $logged_user_document
+ * @property Carbon|null $updated_at
+ */
 class Consent extends Model
 {
     public $incrementing = false;

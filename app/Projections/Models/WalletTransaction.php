@@ -4,7 +4,12 @@ namespace App\Projections\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property string $id
+ * @property Carbon|null $occurred_at
+ */
 class WalletTransaction extends Model
 {
     use HasUuids;

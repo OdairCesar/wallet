@@ -45,7 +45,10 @@ final class ValidateFapiJwtMiddleware
                     loggedUserDocument: $document,
                     organisationId: $context->organisationId,
                     accountIds: $accountsHeader !== null
-                        ? array_filter(explode(',', $accountsHeader))
+                        ? array_values(array_filter(
+                            explode(',', $accountsHeader),
+                            static fn (string $id): bool => $id !== '',
+                        ))
                         : [],
                 );
             }

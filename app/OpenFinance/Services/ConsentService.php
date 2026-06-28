@@ -176,6 +176,24 @@ final class ConsentService
         return preg_replace('/\D/', '', $document) ?? '';
     }
 
+    public function findOrCreateUserByDocument(string $document): User
+    {
+        $existing = $this->findUserByNormalizedDocument($document);
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $normalized = $this->normalizeDocument($document);
+
+        return User::query()->create([
+            'name' => 'Open Finance User',
+            'email' => 'of+'.$normalized.'@wallet.local',
+            'password' => Str::random(40),
+            'document' => $document,
+        ]);
+    }
+
     private function findUserByNormalizedDocument(string $loggedUserDocument): ?User
     {
         $normalized = $this->normalizeDocument($loggedUserDocument);
@@ -195,16 +213,47 @@ final class ConsentService
         array $accountIds,
         ?User $user = null,
     ): array {
+        $user ??= $this->findUserByNormalizedDocument($loggedUserDocument);
+
         if ($accountIds !== []) {
+            if ($user === null) {
+                throw new OpenFinanceDomainException(
+                    'CONSENTIMENTO_INVALIDO',
+                    'Usuário não encontrado para validar as contas da autorização.',
+                );
+            }
+
+            $this->assertAccountsOwnedByUser($user, $accountIds);
+
             return $accountIds;
         }
 
-        $user ??= $this->findUserByNormalizedDocument($loggedUserDocument);
+        $user ??= $this->findOrCreateUserByDocument($loggedUserDocument);
 
-        if ($user === null) {
-            return [];
+        return array_values(
+            WalletAccount::query()->where('user_id', $user->id)->pluck('id')->all(),
+        );
+    }
+
+    /**
+     * @param  list<string>  $accountIds
+     */
+    private function assertAccountsOwnedByUser(User $user, array $accountIds): void
+    {
+        $ownedIds = WalletAccount::query()
+            ->where('user_id', $user->id)
+            ->pluck('id')
+            ->all();
+
+        $ownedLookup = array_flip($ownedIds);
+
+        foreach ($accountIds as $accountId) {
+            if (! isset($ownedLookup[$accountId])) {
+                throw new OpenFinanceDomainException(
+                    'CONSENTIMENTO_INVALIDO',
+                    'Conta não pertence ao usuário da autorização.',
+                );
+            }
         }
-
-        return WalletAccount::query()->where('user_id', $user->id)->pluck('id')->all();
     }
 }

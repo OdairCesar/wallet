@@ -4,7 +4,6 @@ namespace App\Providers;
 
 use App\Contracts\EventPublisherInterface;
 use App\Infrastructure\Events\InMemoryEventPublisher;
-use App\Infrastructure\Events\KafkaEventPublisher;
 use App\Projections\Projectors\WalletProjector;
 use Illuminate\Support\ServiceProvider;
 
@@ -32,8 +31,6 @@ class WalletServiceProvider extends ServiceProvider
         $publisher = $this->app->make(EventPublisherInterface::class);
         $projector = $this->app->make(WalletProjector::class);
 
-        if ($publisher instanceof InMemoryEventPublisher || $publisher instanceof KafkaEventPublisher) {
-            $publisher->subscribe($projector);
-        }
+        $publisher->subscribe($projector);
     }
 }
