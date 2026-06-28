@@ -2,17 +2,22 @@
 
 namespace App\Infrastructure\Events;
 
+use App\Contracts\EventHandlerInterface;
 use App\Contracts\EventPublisherInterface;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Stub para produção na VM.
- * Instale mateusjunges/laravel-kafka e ext-rdkafka, depois implemente publish().
- */
 final class KafkaEventPublisher implements EventPublisherInterface
 {
     /** @var list<DomainEventEnvelope> */
     private array $buffer = [];
+
+    /** @var list<EventHandlerInterface> */
+    private array $handlers = [];
+
+    public function subscribe(EventHandlerInterface $handler): void
+    {
+        $this->handlers[] = $handler;
+    }
 
     public function publish(DomainEventEnvelope $envelope, ?string $topic = null): void
     {
@@ -25,6 +30,12 @@ final class KafkaEventPublisher implements EventPublisherInterface
         ]);
 
         $this->buffer[] = $envelope;
+
+        foreach ($this->handlers as $handler) {
+            if (in_array($envelope->eventType, $handler->subscribedEvents(), true)) {
+                $handler->handle($envelope);
+            }
+        }
     }
 
     public function published(): array

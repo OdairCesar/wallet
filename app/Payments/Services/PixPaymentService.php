@@ -8,12 +8,14 @@ use App\Fraud\Rules\FraudRulesEngine;
 use App\Infrastructure\Events\DomainEventEnvelope;
 use App\Payments\Enums\PaymentEventType;
 use App\Payments\Enums\PixPaymentStatus;
+use App\Projections\Models\AccountBalance;
 use App\Projections\Models\Consent;
+use App\Projections\Models\ConsentAccount;
 use App\Projections\Models\PaymentIntent;
-use App\Wallet\Enums\WalletEventType;
 use App\Wallet\Services\WalletCommandService;
+use App\OpenFinance\Enums\ConsentStatus;
+use App\OpenFinance\Exceptions\OpenFinanceDomainException;
 use Illuminate\Support\Str;
-use InvalidArgumentException;
 
 final class PixPaymentService
 {
@@ -32,36 +34,68 @@ final class PixPaymentService
         $consent = Consent::query()->where('consent_id', $consentId)->first();
 
         if ($consent === null) {
-            throw new InvalidArgumentException('CONSENTIMENTO_NAO_ENCONTRADO');
+            throw new OpenFinanceDomainException(
+                'CONSENTIMENTO_NAO_ENCONTRADO',
+                'Consentimento não encontrado.',
+                404,
+            );
         }
 
-        if ($consent->status !== 'AUTHORISED') {
-            throw new InvalidArgumentException('CONSENTIMENTO_NAO_AUTORIZADO');
+        if ($consent->status !== ConsentStatus::Authorised->value) {
+            throw new OpenFinanceDomainException(
+                'CONSENTIMENTO_NAO_AUTORIZADO',
+                'Consentimento não está autorizado.',
+            );
+        }
+
+        if ($consent->isExpired()) {
+            throw new OpenFinanceDomainException(
+                'CONSENTIMENTO_EXPIRADO',
+                'Consentimento expirado.',
+            );
         }
 
         $paymentId = (string) Str::uuid();
         $correlationId = (string) Str::uuid();
         $amountCents = (int) ($paymentData['amountCents'] ?? 0);
-        $accountId = $paymentData['accountId'] ?? null;
+        $creditorAccountId = $paymentData['creditorAccountId'] ?? null;
+        $debtorAccountId = $paymentData['debtorAccountId'] ?? null;
         $localInstrument = $paymentData['localInstrument'] ?? 'DICT';
+        $clientId = $paymentData['clientId'] ?? null;
 
-        $envelope = DomainEventEnvelope::create(
+        if ($debtorAccountId === null) {
+            $debtorAccountId = ConsentAccount::query()
+                ->where('consent_id', $consentId)
+                ->value('account_id');
+        }
+
+        if ($debtorAccountId === null) {
+            throw new OpenFinanceDomainException(
+                'CONTA_DEBITO_NAO_ENCONTRADA',
+                'Conta de débito não encontrada.',
+            );
+        }
+
+        if ($creditorAccountId === null) {
+            throw new OpenFinanceDomainException(
+                'CONTA_CREDORA_NAO_INFORMADA',
+                'Conta credora não informada.',
+            );
+        }
+
+        $fraudEnvelope = DomainEventEnvelope::create(
             eventType: PaymentEventType::PixInitiated,
-            aggregateId: $paymentId,
-            aggregateType: 'pix_payment',
+            aggregateId: $debtorAccountId,
+            aggregateType: 'wallet_account',
             payload: [
-                'paymentId' => $paymentId,
-                'consentId' => $consentId,
-                'accountId' => $accountId,
-                'status' => PixPaymentStatus::Received->value,
                 'amountCents' => $amountCents,
-                'currency' => 'BRL',
-                'localInstrument' => $localInstrument,
+                'debtorAccountId' => $debtorAccountId,
+                'clientId' => $clientId,
             ],
             correlationId: $correlationId,
         );
 
-        $decision = $this->fraudRules->evaluate($envelope);
+        $decision = $this->fraudRules->evaluate($fraudEnvelope);
 
         if (! $decision->approved) {
             $this->publisher->publish(DomainEventEnvelope::create(
@@ -71,6 +105,7 @@ final class PixPaymentService
                 payload: [
                     'ruleId' => $decision->ruleId,
                     'reason' => $decision->reason,
+                    'clientId' => $clientId,
                 ],
                 correlationId: $correlationId,
             ));
@@ -83,6 +118,7 @@ final class PixPaymentService
                     'paymentId' => $paymentId,
                     'status' => PixPaymentStatus::Rejected->value,
                     'rejectionReason' => $decision->ruleId,
+                    'clientId' => $clientId,
                 ],
                 correlationId: $correlationId,
             ));
@@ -94,10 +130,64 @@ final class PixPaymentService
             ];
         }
 
-        $this->publisher->publish($envelope);
+        $this->publisher->publish(DomainEventEnvelope::create(
+            eventType: PaymentEventType::PixInitiated,
+            aggregateId: $paymentId,
+            aggregateType: 'pix_payment',
+            payload: [
+                'paymentId' => $paymentId,
+                'consentId' => $consentId,
+                'accountId' => $creditorAccountId,
+                'debtorAccountId' => $debtorAccountId,
+                'status' => PixPaymentStatus::Received->value,
+                'amountCents' => $amountCents,
+                'currency' => 'BRL',
+                'localInstrument' => $localInstrument,
+                'clientId' => $clientId,
+            ],
+            correlationId: $correlationId,
+        ));
 
-        if ($accountId !== null && $amountCents > 0) {
-            $this->walletCommands->deposit($accountId, $amountCents, "pix:{$paymentId}", $correlationId);
+        if ($amountCents > 0) {
+            $balance = AccountBalance::query()
+                ->where('account_id', $debtorAccountId)
+                ->value('available_amount_cents');
+
+            if ($balance === null || $balance < $amountCents) {
+                throw new OpenFinanceDomainException(
+                    'SALDO_INSUFICIENTE',
+                    'Saldo insuficiente para o pagamento.',
+                );
+            }
+
+            $transferred = $this->walletCommands->transfer(
+                $debtorAccountId,
+                $creditorAccountId,
+                $amountCents,
+                $correlationId,
+                $clientId,
+            );
+
+            if (! $transferred) {
+                $this->publisher->publish(DomainEventEnvelope::create(
+                    eventType: PaymentEventType::PixRejected,
+                    aggregateId: $paymentId,
+                    aggregateType: 'pix_payment',
+                    payload: [
+                        'paymentId' => $paymentId,
+                        'status' => PixPaymentStatus::Rejected->value,
+                        'rejectionReason' => 'TRANSFER_FAILED',
+                        'clientId' => $clientId,
+                    ],
+                    correlationId: $correlationId,
+                ));
+
+                return [
+                    'paymentId' => $paymentId,
+                    'correlationId' => $correlationId,
+                    'status' => PixPaymentStatus::Rejected->value,
+                ];
+            }
         }
 
         $this->publisher->publish(DomainEventEnvelope::create(
@@ -107,6 +197,7 @@ final class PixPaymentService
             payload: [
                 'paymentId' => $paymentId,
                 'status' => PixPaymentStatus::Completed->value,
+                'clientId' => $clientId,
             ],
             correlationId: $correlationId,
         ));
@@ -123,7 +214,11 @@ final class PixPaymentService
         $payment = PaymentIntent::query()->where('payment_id', $paymentId)->first();
 
         if ($payment === null) {
-            throw new InvalidArgumentException('Pagamento não encontrado.');
+            throw new OpenFinanceDomainException(
+                'PAGAMENTO_NAO_ENCONTRADO',
+                'Pagamento não encontrado.',
+                404,
+            );
         }
 
         $this->publisher->publish(DomainEventEnvelope::create(

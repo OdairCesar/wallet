@@ -6,15 +6,24 @@ use App\OpenFinance\Http\Controllers\OperationController;
 use App\OpenFinance\Http\Controllers\PixPaymentController;
 use App\OpenFinance\Http\Controllers\ResourceController;
 use App\OpenFinance\Http\Middleware\FapiHeadersMiddleware;
+use App\OpenFinance\Http\Middleware\IdempotencyMiddleware;
+use App\OpenFinance\Http\Middleware\RequireMtlsMiddleware;
+use App\OpenFinance\Http\Middleware\ValidateFapiJwtMiddleware;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware([FapiHeadersMiddleware::class])
+Route::middleware([
+    RequireMtlsMiddleware::class,
+    ValidateFapiJwtMiddleware::class,
+    FapiHeadersMiddleware::class,
+    IdempotencyMiddleware::class,
+    'throttle:open-finance',
+])
     ->prefix('open-banking')
     ->group(function () {
         Route::post('consents/v3/consents', [ConsentController::class, 'store']);
-        Route::get('consents/v3/consents/{consentId}', [ConsentController::class, 'show']);
-        Route::patch('consents/v3/consents/{consentId}', [ConsentController::class, 'revoke']);
-        Route::post('consents/v3/consents/{consentId}/authorise', [ConsentController::class, 'authorise']);
+        Route::get('consents/v3/consents/{consentId}', [ConsentController::class, 'show'])->where('consentId', 'urn:wallet:consent:[^/]+');
+        Route::post('consents/v3/consents/{consentId}/authorise', [ConsentController::class, 'authorise'])->where('consentId', 'urn:wallet:consent:[^/]+');
+        Route::patch('consents/v3/consents/{consentId}', [ConsentController::class, 'revoke'])->where('consentId', 'urn:wallet:consent:[^/]+');
 
         Route::get('accounts/v2/accounts', [AccountController::class, 'index']);
         Route::post('accounts/v2/accounts', [AccountController::class, 'store']);

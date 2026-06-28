@@ -2,6 +2,9 @@
 
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\OpenFinance\Exceptions\OpenFinanceAuthException;
+use App\OpenFinance\Exceptions\OpenFinanceDomainException;
+use App\OpenFinance\Http\OpenFinanceResponse;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -28,4 +31,32 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        $exceptions->render(function (OpenFinanceAuthException $e, Request $request) {
+            if ($request->is('api/open-banking/*')) {
+                return OpenFinanceResponse::fromAuthException($e);
+            }
+        });
+
+        $exceptions->render(function (OpenFinanceDomainException $e, Request $request) {
+            if ($request->is('api/open-banking/*')) {
+                return OpenFinanceResponse::singleError(
+                    $e->errorCode,
+                    $e->title(),
+                    $e->getMessage(),
+                    $e->httpStatus,
+                );
+            }
+        });
+
+        $exceptions->render(function (\InvalidArgumentException $e, Request $request) {
+            if ($request->is('api/open-banking/*') && ! $e instanceof OpenFinanceDomainException) {
+                return OpenFinanceResponse::singleError(
+                    'OPERACAO_INVALIDA',
+                    'Operação inválida',
+                    $e->getMessage(),
+                    422,
+                );
+            }
+        });
     })->create();

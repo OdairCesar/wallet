@@ -26,11 +26,12 @@ final class WalletAccountAggregate
 
     public function __construct(
         string $accountId,
-        int $dailyTransferLimitCents = 5_000_000,
+        ?int $dailyTransferLimitCents = null,
     ) {
         $this->accountId = $accountId;
         $this->currency = 'BRL';
-        $this->dailyTransferLimitCents = $dailyTransferLimitCents;
+        $this->dailyTransferLimitCents = $dailyTransferLimitCents
+            ?? (int) config('open_finance.defaults.daily_transfer_limit');
     }
 
     /**

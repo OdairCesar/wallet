@@ -2,8 +2,10 @@
 
 namespace App\Projections\Models;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class WalletAccount extends Model
@@ -29,5 +31,10 @@ class WalletAccount extends Model
     public function balance(): HasOne
     {
         return $this->hasOne(AccountBalance::class, 'account_id');
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

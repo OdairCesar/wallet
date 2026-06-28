@@ -18,6 +18,9 @@ services:
       QUEUE_CONNECTION: redis
       EVENT_BUS_DRIVER: kafka
       KAFKA_BROKERS: kafka:9092
+      FAPI_ENABLED: "true"
+      MTLS_ENABLED: "false"
+      OF_JWT_SECRET: change-me-in-production
     depends_on:
       - postgres
       - redis

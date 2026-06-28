@@ -3,40 +3,37 @@
 namespace App\Fraud\Rules;
 
 use App\Infrastructure\Events\DomainEventEnvelope;
+use App\Payments\Enums\PaymentEventType;
+use App\Projections\Models\WalletTransaction;
 use App\Wallet\Enums\WalletEventType;
 
 final class FraudRulesEngine
 {
-    private const int MAX_TRANSACTIONS_PER_HOUR = 20;
-
-    private const int MAX_AMOUNT_CENTS = 10_000_000;
-
-    /** @var array<string, list<int>> */
-    private array $velocityTracker = [];
-
     public function evaluate(DomainEventEnvelope $envelope): FraudDecision
     {
         if ($envelope->eventType !== WalletEventType::TransferRequested
-            && $envelope->eventType !== 'payments.pix.initiated') {
+            && $envelope->eventType !== PaymentEventType::PixInitiated) {
             return FraudDecision::approved();
         }
 
         $amount = $envelope->payload['amountCents'] ?? 0;
-        $accountId = $envelope->aggregateId;
+        $accountId = $envelope->payload['debtorAccountId']
+            ?? $envelope->payload['accountId']
+            ?? $envelope->aggregateId;
 
-        if ($amount > self::MAX_AMOUNT_CENTS) {
+        $maxAmount = config('open_finance.fraud.max_amount_cents');
+
+        if ($amount > $maxAmount) {
             return FraudDecision::blocked('AMOUNT_THRESHOLD', 'Valor acima do limite antifraude.');
         }
 
-        $this->velocityTracker[$accountId] ??= [];
-        $this->velocityTracker[$accountId][] = time();
+        $maxPerHour = config('open_finance.fraud.max_transactions_per_hour');
+        $recentCount = WalletTransaction::query()
+            ->where('account_id', $accountId)
+            ->where('occurred_at', '>=', now()->subHour())
+            ->count();
 
-        $recent = array_filter(
-            $this->velocityTracker[$accountId],
-            fn (int $ts) => $ts >= time() - 3600,
-        );
-
-        if (count($recent) > self::MAX_TRANSACTIONS_PER_HOUR) {
+        if ($recentCount >= $maxPerHour) {
             return FraudDecision::blocked('VELOCITY', 'Limite de transações por hora excedido.');
         }
 

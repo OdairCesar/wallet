@@ -1,11 +1,11 @@
 <?php
 
 use App\Providers\AppServiceProvider;
-use App\Providers\FortifyServiceProvider;
+use App\Providers\OpenFinanceServiceProvider;
 use App\Providers\WalletServiceProvider;
 
 return [
     AppServiceProvider::class,
-    FortifyServiceProvider::class,
+    OpenFinanceServiceProvider::class,
     WalletServiceProvider::class,
 ];

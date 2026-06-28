@@ -6,13 +6,12 @@ use App\Contracts\EventPublisherInterface;
 use App\Fraud\Enums\FraudEventType;
 use App\Fraud\Rules\FraudRulesEngine;
 use App\Infrastructure\Events\DomainEventEnvelope;
-use App\Infrastructure\Events\InMemoryEventPublisher;
+use App\OpenFinance\Exceptions\OpenFinanceDomainException;
 use App\Projections\Models\WalletAccount;
 use App\Wallet\Aggregates\WalletAccountAggregate;
 use App\Wallet\Enums\AccountType;
 use App\Wallet\Enums\WalletEventType;
 use Illuminate\Support\Str;
-use InvalidArgumentException;
 
 final class WalletCommandService
 {
@@ -25,12 +24,13 @@ final class WalletCommandService
         ?int $userId,
         AccountType $accountType,
         ?string $correlationId = null,
+        ?string $clientId = null,
     ): string {
         $accountId = (string) Str::uuid();
         $aggregate = new WalletAccountAggregate($accountId);
         $aggregate->createAccount($accountType->value, $userId, $correlationId);
 
-        $this->publishRecorded($aggregate);
+        $this->publishRecorded($aggregate, $clientId);
 
         return $accountId;
     }
@@ -40,10 +40,11 @@ final class WalletCommandService
         int $amountCents,
         string $reference,
         ?string $correlationId = null,
+        ?string $clientId = null,
     ): void {
         $aggregate = $this->loadAggregate($accountId);
         $aggregate->deposit($amountCents, $reference, $correlationId);
-        $this->publishRecorded($aggregate);
+        $this->publishRecorded($aggregate, $clientId);
     }
 
     public function transfer(
@@ -51,9 +52,14 @@ final class WalletCommandService
         string $toAccountId,
         int $amountCents,
         ?string $correlationId = null,
-    ): void {
+        ?string $clientId = null,
+    ): bool {
         if (! WalletAccount::query()->where('id', $toAccountId)->exists()) {
-            throw new InvalidArgumentException('Conta destino não encontrada.');
+            throw new OpenFinanceDomainException(
+                'CONTA_NAO_ENCONTRADA',
+                'Conta destino não encontrada.',
+                404,
+            );
         }
 
         $requested = DomainEventEnvelope::create(
@@ -63,6 +69,7 @@ final class WalletCommandService
             payload: [
                 'amountCents' => $amountCents,
                 'toAccountId' => $toAccountId,
+                'clientId' => $clientId,
             ],
             correlationId: $correlationId,
         );
@@ -78,6 +85,7 @@ final class WalletCommandService
                     'ruleId' => $decision->ruleId,
                     'reason' => $decision->reason,
                     'amountCents' => $amountCents,
+                    'clientId' => $clientId,
                 ],
                 correlationId: $correlationId,
             ));
@@ -90,41 +98,46 @@ final class WalletCommandService
                     'amountCents' => $amountCents,
                     'toAccountId' => $toAccountId,
                     'reason' => 'FRAUD_BLOCKED',
+                    'clientId' => $clientId,
                 ],
                 correlationId: $correlationId,
             ));
 
-            return;
+            return false;
         }
 
         $this->publisher->publish(DomainEventEnvelope::create(
             eventType: FraudEventType::TransactionApproved,
             aggregateId: $fromAccountId,
             aggregateType: 'wallet_account',
-            payload: ['amountCents' => $amountCents],
+            payload: [
+                'amountCents' => $amountCents,
+                'clientId' => $clientId,
+            ],
             correlationId: $correlationId,
         ));
 
         $aggregate = $this->loadAggregate($fromAccountId);
         $aggregate->transfer($amountCents, $toAccountId, $correlationId);
-        $this->publishRecorded($aggregate);
+
+        return $this->publishRecorded($aggregate, $clientId);
     }
 
     private function loadAggregate(string $accountId): WalletAccountAggregate
     {
-        if ($this->publisher instanceof InMemoryEventPublisher) {
-            $events = array_values(array_filter(
-                $this->publisher->published(),
-                fn (DomainEventEnvelope $e) => $e->aggregateId === $accountId
-                    && str_starts_with($e->eventType, 'wallet.'),
-            ));
-        } else {
-            $events = [];
-        }
+        $events = array_values(array_filter(
+            $this->publisher->published(),
+            fn (DomainEventEnvelope $e) => $e->aggregateId === $accountId
+                && str_starts_with($e->eventType, 'wallet.'),
+        ));
 
         if ($events === []) {
             if (! WalletAccount::query()->where('id', $accountId)->exists()) {
-                throw new InvalidArgumentException('Conta não encontrada.');
+                throw new OpenFinanceDomainException(
+                    'CONTA_NAO_ENCONTRADA',
+                    'Conta não encontrada.',
+                    404,
+                );
             }
 
             return new WalletAccountAggregate($accountId);
@@ -133,10 +146,30 @@ final class WalletCommandService
         return WalletAccountAggregate::reconstitute($events);
     }
 
-    private function publishRecorded(WalletAccountAggregate $aggregate): void
+    private function publishRecorded(WalletAccountAggregate $aggregate, ?string $clientId = null): bool
     {
+        $completed = false;
+
         foreach ($aggregate->pullRecordedEvents() as $event) {
+            if ($clientId !== null) {
+                $event = DomainEventEnvelope::create(
+                    eventType: $event->eventType,
+                    aggregateId: $event->aggregateId,
+                    aggregateType: $event->aggregateType,
+                    payload: array_merge($event->payload, ['clientId' => $clientId]),
+                    correlationId: $event->correlationId,
+                    causationId: $event->causationId,
+                    eventVersion: $event->eventVersion,
+                );
+            }
+
             $this->publisher->publish($event);
+
+            if ($event->eventType === WalletEventType::TransferCompleted) {
+                $completed = true;
+            }
         }
+
+        return $completed;
     }
 }

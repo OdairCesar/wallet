@@ -5,6 +5,7 @@ namespace App\Projections\Projectors;
 use App\Contracts\EventHandlerInterface;
 use App\Infrastructure\Events\DomainEventEnvelope;
 use App\OpenFinance\Enums\ConsentEventType;
+use App\OpenFinance\Enums\ConsentStatus;
 use App\Payments\Enums\PaymentEventType;
 use App\Projections\Models\AccountBalance;
 use App\Projections\Models\Consent;
@@ -46,8 +47,8 @@ final class WalletProjector implements EventHandlerInterface
             WalletEventType::TransferReversed => $this->projectTransferReversed($envelope),
             ConsentEventType::Requested => $this->projectConsentRequested($envelope),
             ConsentEventType::Authorised => $this->projectConsentAuthorised($envelope),
-            ConsentEventType::Rejected => $this->projectConsentStatus($envelope, 'REJECTED'),
-            ConsentEventType::Revoked => $this->projectConsentStatus($envelope, 'REVOKED'),
+            ConsentEventType::Rejected => $this->projectConsentStatus($envelope, ConsentStatus::Rejected->value),
+            ConsentEventType::Revoked => $this->projectConsentStatus($envelope, ConsentStatus::Revoked->value),
             PaymentEventType::PixInitiated => $this->projectPixInitiated($envelope),
             PaymentEventType::PixCompleted => $this->projectPixStatus($envelope),
             PaymentEventType::PixRejected => $this->projectPixStatus($envelope),
@@ -175,6 +176,7 @@ final class WalletProjector implements EventHandlerInterface
             ['consent_id' => $envelope->payload['consentId']],
             [
                 'status' => $envelope->payload['status'],
+                'client_id' => $envelope->payload['clientId'] ?? null,
                 'permissions' => $envelope->payload['permissions'],
                 'expiration_date_time' => $envelope->payload['expirationDateTime'] ?? null,
                 'creation_date_time' => $envelope->payload['creationDateTime'],
@@ -188,7 +190,7 @@ final class WalletProjector implements EventHandlerInterface
     {
         Consent::query()
             ->where('consent_id', $envelope->payload['consentId'])
-            ->update(['status' => 'AUTHORISED']);
+            ->update(['status' => ConsentStatus::Authorised->value]);
     }
 
     private function projectConsentStatus(DomainEventEnvelope $envelope, string $status): void
@@ -252,6 +254,9 @@ final class WalletProjector implements EventHandlerInterface
                 'status' => $this->resolveOperationStatus($envelope),
                 'operation_type' => $envelope->eventType,
                 'resource_id' => $envelope->aggregateId,
+                'metadata' => array_filter([
+                    'client_id' => $envelope->payload['clientId'] ?? null,
+                ]),
             ],
         );
     }

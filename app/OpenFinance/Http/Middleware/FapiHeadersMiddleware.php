@@ -2,6 +2,7 @@
 
 namespace App\OpenFinance\Http\Middleware;
 
+use App\OpenFinance\Http\OpenFinanceResponse;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -11,7 +12,18 @@ final class FapiHeadersMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->headers->has('x-fapi-interaction-id')) {
+        $interactionId = $request->header('x-fapi-interaction-id');
+
+        if ($interactionId !== null && $interactionId !== '') {
+            if (! Str::isUuid($interactionId)) {
+                return OpenFinanceResponse::singleError(
+                    'INVALID_FAPI_HEADER',
+                    'Header inválido',
+                    'x-fapi-interaction-id deve ser um UUID válido.',
+                    400,
+                );
+            }
+        } else {
             $request->headers->set('x-fapi-interaction-id', (string) Str::uuid());
         }
 

@@ -2,15 +2,26 @@
 
 namespace App\OpenFinance\Http\Controllers;
 
+use App\OpenFinance\Enums\OpenFinanceScope;
 use App\OpenFinance\Http\OpenFinanceResponse;
+use App\OpenFinance\Security\OpenFinanceAuthorizationService;
+use App\OpenFinance\Security\OpenFinanceContextResolver;
 use App\Projections\Models\WalletAccount;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 final class ResourceController
 {
-    public function index(): JsonResponse
+    public function __construct(
+        private readonly OpenFinanceAuthorizationService $authorization,
+        private readonly OpenFinanceContextResolver $contextResolver,
+    ) {}
+
+    public function index(Request $request): JsonResponse
     {
-        $accounts = WalletAccount::query()->get(['id', 'account_type', 'status']);
+        $context = $this->contextResolver->require($request);
+        $this->authorization->assertScope($context, OpenFinanceScope::ResourcesRead);
+        $accounts = $this->authorization->accountsQueryForContext($context)->get(['id', 'account_type', 'status']);
 
         return OpenFinanceResponse::data(
             $accounts->map(fn (WalletAccount $a) => [

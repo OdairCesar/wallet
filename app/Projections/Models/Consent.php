@@ -14,6 +14,7 @@ class Consent extends Model
 
     protected $fillable = [
         'consent_id',
+        'client_id',
         'status',
         'permissions',
         'expiration_date_time',
@@ -29,5 +30,11 @@ class Consent extends Model
             'expiration_date_time' => 'datetime',
             'creation_date_time' => 'datetime',
         ];
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->expiration_date_time !== null
+            && $this->expiration_date_time->isPast();
     }
 }

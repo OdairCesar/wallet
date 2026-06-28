@@ -30,9 +30,10 @@ class WalletServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $publisher = $this->app->make(EventPublisherInterface::class);
+        $projector = $this->app->make(WalletProjector::class);
 
-        if ($publisher instanceof InMemoryEventPublisher) {
-            $publisher->subscribe($this->app->make(WalletProjector::class));
+        if ($publisher instanceof InMemoryEventPublisher || $publisher instanceof KafkaEventPublisher) {
+            $publisher->subscribe($projector);
         }
     }
 }

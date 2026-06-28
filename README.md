@@ -2,7 +2,7 @@
 
 API de carteira digital alinhada ao **Open Finance Brasil**, com arquitetura **Event Sourcing** (Kafka), **CQRS** e adapters plugáveis para integração com bancos e fintechs participantes.
 
-A interface web é apenas informativa (home do projeto). Toda a operação da carteira é feita via **API REST**.
+A interface web expõe apenas a **home** (`/`) e a **documentação da API** (`/docs/api`). Não há páginas de login, configurações ou fluxos de consentimento no front-end — toda a operação da carteira é feita via **API REST**.
 
 ---
 

@@ -21,7 +21,8 @@ class StorePixPaymentRequest extends FormRequest
             'data.localInstrument' => ['nullable', 'string', 'in:MANU,DICT,QRDN,QRES'],
             'data.payment.amount' => ['required', 'numeric', 'min:0.01'],
             'data.payment.currency' => ['nullable', 'string', 'size:3'],
-            'data.creditorAccount.accountId' => ['nullable', 'uuid'],
+            'data.creditorAccount.accountId' => ['required', 'uuid'],
+            'data.debtorAccount.accountId' => ['nullable', 'uuid'],
         ];
     }
 }
