@@ -1,0 +1,10 @@
+{
+  "data": {
+    "consentId": "urn:wallet:consent:00000000-0000-4000-8000-000000000001",
+    "creationDateTime": "2026-06-28T12:00:00Z",
+    "status": "AWAITING_AUTHORISATION",
+    "statusUpdateDateTime": "2026-06-28T12:00:00Z",
+    "permissions": ["ACCOUNTS_READ", "ACCOUNTS_BALANCES_READ"],
+    "expirationDateTime": "2026-06-29T12:00:00Z"
+  }
+}

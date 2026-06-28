@@ -1,0 +1,9 @@
+{
+  "errors": [
+    {
+      "code": "CONSENTIMENTO_NAO_AUTORIZADO",
+      "title": "Pagamento rejeitado",
+      "detail": "Validação de consentimento ou pagamento falhou."
+    }
+  ]
+}

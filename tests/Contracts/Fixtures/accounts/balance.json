@@ -1,0 +1,7 @@
+{
+  "data": {
+    "availableAmount": { "amount": "100.00", "currency": "BRL" },
+    "blockedAmount": { "amount": "0.00", "currency": "BRL" },
+    "automaticallyInvestedAmount": { "amount": "0.00", "currency": "BRL" }
+  }
+}

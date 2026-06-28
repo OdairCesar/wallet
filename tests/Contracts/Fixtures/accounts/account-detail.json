@@ -1,0 +1,12 @@
+{
+  "data": {
+    "brandName": "Wallet",
+    "companyCnpj": "",
+    "type": "PERSONAL",
+    "compeCode": "001",
+    "branchCode": "0001",
+    "number": "12345678",
+    "checkDigit": "0",
+    "accountId": "00000000-0000-4000-8000-000000000002"
+  }
+}
